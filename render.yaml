@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: snapshooter
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: python --version
+    startCommand: python Server/server.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: SNAPSHOOTER_HOST
+        value: 0.0.0.0
+      - key: SNAPSHOOTER_TOKEN
+        generateValue: true

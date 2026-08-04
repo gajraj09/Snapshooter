@@ -1,0 +1,7 @@
+{
+  "server_url": "https://your-snapshooter-service.onrender.com",
+  "token": "replace-with-the-server-token",
+  "client_id": "my-pc",
+  "poll_seconds": 1.0,
+  "jpeg_quality": 85
+}

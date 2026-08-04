@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+Client/.env
+Server/.env
+Client/config.json
+
+# Runtime output
+Client/*.log
+Server/screenshots/
+*.jpg
+*.jpeg
+*.png
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Test and cache output
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
