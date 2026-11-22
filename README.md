@@ -39,6 +39,14 @@ Snapshooter/
 7. The dashboard refreshes and displays the latest screenshots.
 8. After a screenshot arrives, the server automatically sends it to Groq for question analysis. The dashboard displays only the selected option and answer text below the screenshot.
 
+### Request a screenshot and answer through the API
+
+Call `GET /takesnap` to create a screenshot request and wait up to 15 seconds for the connected PC client to capture it and for Groq to analyze it. On success, the endpoint returns JSON with the answer, request ID, analysis status, and screenshot URL. If token protection is enabled, pass the token as `?token=YOUR_TOKEN` or send the `X-Screenshot-Token` header. A timeout returns HTTP `504` with a JSON error.
+
+```text
+http://YOUR_SERVER_IP:8765/takesnap
+```
+
 ## Configuration
 
 Use the JSON config files instead of environment variables.

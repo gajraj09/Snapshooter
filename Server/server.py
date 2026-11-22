@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 HOST = "0.0.0.0"
 PORT = 8765
 GROQ_MODEL = "qwen/qwen3.8-27b"
+TAKE_SNAPSHOT_TIMEOUT_SECONDS = 15
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 SCREENSHOT_DIR = os.path.join(BASE_DIR, "screenshots")
@@ -560,6 +561,46 @@ class ServerHandler(BaseHTTPRequestHandler):
                     "images": list(app_state["images"]),
                 }
             send_json(self, payload)
+            return
+
+        if parsed.path.rstrip("/") == "/takesnap":
+            if not check_token(self, parsed):
+                send_json(self, {"success": False, "error": "Unauthorized"}, status=401)
+                return
+
+            request_item = create_screenshot_request()
+            request_id = request_item["request_id"]
+            deadline = time.monotonic() + TAKE_SNAPSHOT_TIMEOUT_SECONDS
+
+            while time.monotonic() < deadline:
+                with state_lock:
+                    record = next(
+                        (dict(item) for item in app_state["images"]
+                         if item["request_id"] == request_id),
+                        None,
+                    )
+                if record and record.get("analysis_status") in {"complete", "failed"}:
+                    send_json(self, {
+                        "success": record["analysis_status"] == "complete",
+                        "request_id": request_id,
+                        "answer": record.get("answer", ""),
+                        "screenshot_url": record.get("url"),
+                        "analysis_status": record["analysis_status"],
+                    })
+                    return
+                time.sleep(0.2)
+
+            with state_lock:
+                app_state["pending"] = [
+                    item for item in app_state["pending"]
+                    if item["request_id"] != request_id
+                ]
+            send_json(self, {
+                "success": False,
+                "request_id": request_id,
+                "error": "Timed out waiting for the screenshot and its analysis.",
+                "timeout_seconds": TAKE_SNAPSHOT_TIMEOUT_SECONDS,
+            }, status=504)
             return
 
         if parsed.path == "/healthz":
