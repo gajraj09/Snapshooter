@@ -419,6 +419,9 @@ def solve_image_questions(image_bytes, mime_type):
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            # Avoid urllib's generic Python-urllib signature, which Cloudflare may block.
+            "User-Agent": "Snapshooter/1.0 (Groq API client)",
             "Authorization": f"Bearer {api_key}",
         },
         method="POST",
