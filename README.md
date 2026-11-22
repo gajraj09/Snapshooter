@@ -41,7 +41,7 @@ Snapshooter/
 
 ### Request a screenshot and answer through the API
 
-Open `GET /takesnap` in a browser to see a loading page while the connected PC client captures a screenshot and Groq analyzes it. The page then displays the answer as JSON and shows the screenshot. It waits up to 120 seconds before timing out. For a single JSON response instead, call `GET /takesnap?format=json`; it waits up to 90 seconds and returns the answer, request ID, analysis status, and screenshot URL. If token protection is enabled, pass the token as `?token=YOUR_TOKEN` (combine it with `format=json` for JSON mode) or send the `X-Screenshot-Token` header.
+Call `GET /takesnap` to request a screenshot. The endpoint waits up to 90 seconds for capture and Groq analysis, then returns raw JSON text fields only (no HTML or image). The browser may show its normal loading indicator while the server waits. A successful response includes `success`, `status`, `request_id`, and `answer`; a failure includes `success`, `status`, `request_id`, and `error`. If token protection is enabled, pass the token as `?token=YOUR_TOKEN` or send the `X-Screenshot-Token` header.
 
 ```text
 http://YOUR_SERVER_IP:8765/takesnap

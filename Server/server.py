@@ -350,92 +350,7 @@ INDEX_HTML = r"""<!doctype html>
 """
 
 
-TAKESNAP_HTML = r"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Snapshooter - Taking Screenshot</title>
-  <style>
-    body { margin: 0; padding: 28px; background: #f5f7fb; color: #182230; font-family: Segoe UI, Arial, sans-serif; }
-    main { max-width: 680px; margin: 8vh auto; padding: 24px; border: 1px solid #d0d5dd; border-radius: 10px; background: white; }
-    h1 { margin-top: 0; font-size: 24px; }
-    #status { color: #475467; }
-    .spinner { width: 28px; height: 28px; margin: 20px 0; border: 4px solid #d0d5dd; border-top-color: #0f766e; border-radius: 50%; animation: spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #result { padding: 14px; overflow-wrap: anywhere; border-radius: 6px; background: #f8fafc; white-space: pre-wrap; }
-    #result:empty { display: none; }
-    img { display: block; max-width: 100%; height: auto; margin-top: 18px; border-radius: 6px; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Snapshooter</h1>
-    <div class="spinner" id="spinner" aria-hidden="true"></div>
-    <p id="status" role="status" aria-live="polite">Sending screenshot request...</p>
-    <pre id="result"></pre>
-    <img id="screenshot" alt="Captured screenshot" hidden>
-  </main>
-  <script>
-    const statusEl = document.getElementById("status");
-    const resultEl = document.getElementById("result");
-    const spinner = document.getElementById("spinner");
-    const screenshot = document.getElementById("screenshot");
-    const query = new URLSearchParams(location.search);
-    const token = query.get("token") || sessionStorage.getItem("snapshooterToken") || "";
-    if (token) sessionStorage.setItem("snapshooterToken", token);
-    const headers = token ? { "X-Screenshot-Token": token } : {};
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    function finish(payload, imageUrl) {
-      spinner.hidden = true;
-      statusEl.textContent = payload.success ? "Answer ready" : "Request failed";
-      resultEl.textContent = JSON.stringify(payload, null, 2);
-      if (imageUrl) {
-        screenshot.src = token ? `${imageUrl}?token=${encodeURIComponent(token)}` : imageUrl;
-        screenshot.hidden = false;
-      }
-    }
-
-    async function run() {
-      const start = Date.now();
-      try {
-        const createdResponse = await fetch("/api/request", { method: "POST", headers, cache: "no-store" });
-        const created = await createdResponse.json();
-        if (!createdResponse.ok) throw new Error(created.error || "Could not create screenshot request.");
-        statusEl.textContent = "Waiting for the PC client to capture the screenshot...";
-
-        while (Date.now() - start < 120000) {
-          const stateResponse = await fetch("/api/state", { headers, cache: "no-store" });
-          const state = await stateResponse.json();
-          if (!stateResponse.ok) throw new Error(state.error || "Could not read screenshot status.");
-          const image = (state.images || []).find((item) => item.request_id === created.request_id);
-          if (image) {
-            if (image.analysis_status === "complete" || image.analysis_status === "failed") {
-              finish({
-                success: image.analysis_status === "complete",
-                request_id: image.request_id,
-                answer: image.answer,
-                screenshot_url: image.url,
-                analysis_status: image.analysis_status,
-              }, image.url);
-              return;
-            }
-            statusEl.textContent = "Screenshot captured. Waiting for the answer...";
-          }
-          await sleep(700);
-        }
-        finish({ success: false, error: "Timed out waiting for screenshot capture and analysis." });
-      } catch (error) {
-        finish({ success: false, error: error.message || "Screenshot request failed." });
-      }
-    }
-
-    run();
-  </script>
-</body>
-</html>
-"""
 
 
 def now_text():
@@ -652,18 +567,8 @@ class ServerHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.rstrip("/") == "/takesnap":
-            if parse_qs(parsed.query).get("format", [""])[0] != "json":
-                body = TAKESNAP_HTML.encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
-
             if not check_token(self, parsed):
-                send_json(self, {"success": False, "error": "Unauthorized"}, status=401)
+                send_json(self, {"success": False, "status": "unauthorized", "error": "Unauthorized"}, status=401)
                 return
 
             request_item = create_screenshot_request()
@@ -678,13 +583,17 @@ class ServerHandler(BaseHTTPRequestHandler):
                         None,
                     )
                 if record and record.get("analysis_status") in {"complete", "failed"}:
-                    send_json(self, {
-                        "success": record["analysis_status"] == "complete",
+                    analysis_succeeded = record["analysis_status"] == "complete"
+                    response = {
+                        "success": analysis_succeeded,
+                        "status": record["analysis_status"],
                         "request_id": request_id,
-                        "answer": record.get("answer", ""),
-                        "screenshot_url": record.get("url"),
-                        "analysis_status": record["analysis_status"],
-                    })
+                    }
+                    if analysis_succeeded:
+                        response["answer"] = record.get("answer", "")
+                    else:
+                        response["error"] = record.get("answer", "Answer unavailable.")
+                    send_json(self, response)
                     return
                 time.sleep(0.2)
 
@@ -695,6 +604,7 @@ class ServerHandler(BaseHTTPRequestHandler):
                 ]
             send_json(self, {
                 "success": False,
+                "status": "timeout",
                 "request_id": request_id,
                 "error": "Timed out waiting for the screenshot and its analysis.",
                 "timeout_seconds": TAKE_SNAPSHOT_TIMEOUT_SECONDS,
