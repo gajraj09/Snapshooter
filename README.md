@@ -10,6 +10,7 @@ Snapshooter is a lightweight Python remote screenshot dashboard. A hosted server
 - Windows-friendly background client using `pythonw.exe` and the included VBS launcher.
 - Render deployment blueprint included in `render.yaml`.
 - SEO-aware HTML metadata for title, description, Open Graph, Twitter card, and mobile theme color. The dashboard is marked `noindex` because screenshots are private operational data.
+- Gemini-powered question answering for uploaded JPG, PNG, and WEBP images.
 
 ## Project Structure
 
@@ -36,6 +37,7 @@ Snapshooter/
 5. When a request exists, the client captures the screen with `pyautogui`.
 6. The client uploads the JPEG to `/api/upload/<request_id>`.
 7. The dashboard refreshes and displays the latest screenshots.
+8. After a screenshot arrives, the server automatically sends it to Gemini for question analysis. The dashboard displays each answer directly below its screenshot, including the selected option and a brief explanation.
 
 ## Configuration
 
@@ -98,6 +100,8 @@ wscript "Client\Run Client Hidden.vbs"
 ```
 
 ## Deploy The Server On Render
+
+For local use, paste your key into `Server/.env` on the `GEMINI_API_KEY=` line. The server loads this file automatically and does not overwrite environment variables set by the host. `Server/.env` is ignored by Git. For deployment, set `GEMINI_API_KEY` in the server's secret environment settings. The automatic screenshot analysis uses `gemini-2.5-flash-lite`.
 
 Render is the recommended target for this project because Snapshooter runs as a persistent Python web service.
 
