@@ -2,6 +2,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -392,12 +393,12 @@ def solve_image_questions(image_bytes, mime_type):
         raise RuntimeError("Groq is not configured. Set GROQ_API_KEY in Server/.env or the server environment.")
 
     prompt = (
-        "You are an educational question-solving assistant. Analyze the uploaded image carefully. "
-        "Extract every visible question and its options, identify the most likely correct answer, "
-        "and briefly explain it. Mention when text is unclear and do not guess if there is not "
-        "enough information. For each question, start with 'Answer: Option [letter] — [option text]' "
-        "when options are present, then include Question, Options, Explanation, and Confidence "
-        "(High / Medium / Low). Return a clear numbered format."
+        "Read every question and option in the image, then solve each question. "
+        "Return only the correct option and its answer text, one line per question, using exactly "
+        "'Answer: Option [letter] - [option text]'. Do not repeat the question, list other options, "
+        "or include explanations, confidence, introductions, or extra commentary. "
+        "If the question is unreadable or cannot be answered from the image, say so briefly instead "
+        "of guessing."
     )
     encoded_image = base64.b64encode(image_bytes).decode("ascii")
     payload = {
@@ -436,7 +437,23 @@ def solve_image_questions(image_bytes, mime_type):
     answer = choices[0].get("message", {}).get("content", "") if choices else ""
     if not answer:
         raise RuntimeError("Groq returned no answer for this image.")
-    return answer
+
+    # Models sometimes append their original question and explanation despite
+    # formatting instructions. Keep only lines that identify a chosen option.
+    answer_lines = []
+    answer_pattern = re.compile(
+        r"^\s*(?:\d+[.)]\s*)?(?:\*{1,2})?Answer(?:\*{1,2})?:\s*"
+        r"(?:\*{1,2})?Option\s+([A-H])(?:\*{1,2})?\s*[-:—–]\s*(.*?)\s*$",
+        re.IGNORECASE,
+    )
+    for line in answer.splitlines():
+        match = answer_pattern.match(line.strip().strip("*"))
+        if match:
+            option, answer_text = match.groups()
+            answer_lines.append(f"Answer: Option {option.upper()} - {answer_text.strip().strip('*')}")
+    if answer_lines:
+        return "\n".join(answer_lines)
+    return "Answer unavailable: Could not identify a correct option in the response."
 
 
 def create_screenshot_request():

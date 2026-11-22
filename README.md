@@ -37,7 +37,7 @@ Snapshooter/
 5. When a request exists, the client captures the screen with `pyautogui`.
 6. The client uploads the JPEG to `/api/upload/<request_id>`.
 7. The dashboard refreshes and displays the latest screenshots.
-8. After a screenshot arrives, the server automatically sends it to Groq for question analysis. The dashboard displays each answer directly below its screenshot, including the selected option and a brief explanation.
+8. After a screenshot arrives, the server automatically sends it to Groq for question analysis. The dashboard displays only the selected option and answer text below the screenshot.
 
 ## Configuration
 
