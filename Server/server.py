@@ -16,7 +16,6 @@ from urllib.parse import parse_qs, urlparse
 HOST = "0.0.0.0"
 PORT = 8765
 GROQ_MODEL = "qwen/qwen3.8-27b"
-TAKE_SNAPSHOT_TIMEOUT_SECONDS = 90
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 SCREENSHOT_DIR = os.path.join(BASE_DIR, "screenshots")
@@ -572,43 +571,37 @@ class ServerHandler(BaseHTTPRequestHandler):
                 return
 
             request_item = create_screenshot_request()
-            request_id = request_item["request_id"]
-            deadline = time.monotonic() + TAKE_SNAPSHOT_TIMEOUT_SECONDS
-
-            while time.monotonic() < deadline:
-                with state_lock:
-                    record = next(
-                        (dict(item) for item in app_state["images"]
-                         if item["request_id"] == request_id),
-                        None,
-                    )
-                if record and record.get("analysis_status") in {"complete", "failed"}:
-                    analysis_succeeded = record["analysis_status"] == "complete"
-                    response = {
-                        "success": analysis_succeeded,
-                        "status": record["analysis_status"],
-                        "request_id": request_id,
-                    }
-                    if analysis_succeeded:
-                        response["answer"] = record.get("answer", "")
-                    else:
-                        response["error"] = record.get("answer", "Answer unavailable.")
-                    send_json(self, response)
-                    return
-                time.sleep(0.2)
-
-            with state_lock:
-                app_state["pending"] = [
-                    item for item in app_state["pending"]
-                    if item["request_id"] != request_id
-                ]
             send_json(self, {
-                "success": False,
-                "status": "timeout",
-                "request_id": request_id,
-                "error": "Timed out waiting for the screenshot and its analysis.",
-                "timeout_seconds": TAKE_SNAPSHOT_TIMEOUT_SECONDS,
-            }, status=504)
+                "success": True,
+                "status": "requested",
+                "request_id": request_item["request_id"],
+                "message": "Screenshot request queued.",
+            }, status=202)
+            return
+
+        if parsed.path.rstrip("/") == "/respose":
+            if not check_token(self, parsed):
+                send_json(self, {"success": False, "error": "Unauthorized"}, status=401)
+                return
+            with state_lock:
+                recent_images = [dict(item) for item in app_state["images"][:20]]
+            responses = []
+            for item in recent_images:
+                entry = {
+                    "request_id": item["request_id"],
+                    "captured_at": item["uploaded_at"],
+                    "status": item.get("analysis_status", "processing"),
+                }
+                if entry["status"] == "complete":
+                    entry["answer"] = item.get("answer", "")
+                elif entry["status"] == "failed":
+                    entry["error"] = item.get("answer", "Answer unavailable.")
+                responses.append(entry)
+            send_json(self, {
+                "success": True,
+                "count": len(responses),
+                "responses": responses,
+            })
             return
 
         if parsed.path == "/healthz":

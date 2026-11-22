@@ -41,10 +41,11 @@ Snapshooter/
 
 ### Request a screenshot and answer through the API
 
-Call `GET /takesnap` to request a screenshot. The endpoint waits up to 90 seconds for capture and Groq analysis, then returns raw JSON text fields only (no HTML or image). The browser may show its normal loading indicator while the server waits. A successful response includes `success`, `status`, `request_id`, and `answer`; a failure includes `success`, `status`, `request_id`, and `error`. If token protection is enabled, pass the token as `?token=YOUR_TOKEN` or send the `X-Screenshot-Token` header.
+Call `GET /takesnap` to queue a screenshot request. It immediately returns JSON with the request ID. Then call `GET /respose` to retrieve the latest 20 captured-image analysis records as JSON. Entries show `processing`, `complete`, or `failed` status; completed entries include the answer text. If token protection is enabled, pass the token to both endpoints as `?token=YOUR_TOKEN` or send the `X-Screenshot-Token` header.
 
 ```text
 http://YOUR_SERVER_IP:8765/takesnap
+http://YOUR_SERVER_IP:8765/respose
 ```
 
 ## Configuration
