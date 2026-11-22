@@ -10,12 +10,11 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
-import urllib.parse
 
 
 HOST = "0.0.0.0"
 PORT = 8765
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+GROQ_MODEL = "qwen/qwen3.8-27b"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 SCREENSHOT_DIR = os.path.join(BASE_DIR, "screenshots")
@@ -388,9 +387,9 @@ def send_json(handler, payload, status=200):
 
 
 def solve_image_questions(image_bytes, mime_type):
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("Gemini is not configured. Set GEMINI_API_KEY on the server.")
+        raise RuntimeError("Groq is not configured. Set GROQ_API_KEY in Server/.env or the server environment.")
 
     prompt = (
         "You are an educational question-solving assistant. Analyze the uploaded image carefully. "
@@ -400,24 +399,28 @@ def solve_image_questions(image_bytes, mime_type):
         "when options are present, then include Question, Options, Explanation, and Confidence "
         "(High / Medium / Low). Return a clear numbered format."
     )
+    encoded_image = base64.b64encode(image_bytes).decode("ascii")
     payload = {
-        "contents": [{"parts": [
-            {"text": prompt},
-            {"inline_data": {
-                "mime_type": mime_type,
-                "data": base64.b64encode(image_bytes).decode("ascii"),
-            }},
-        ]}],
-        "generationConfig": {"temperature": 0.2},
+        "model": GROQ_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {
+                    "url": f"data:{mime_type};base64,{encoded_image}",
+                }},
+            ],
+        }],
+        "temperature": 0.2,
+        "max_completion_tokens": 2048,
     }
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={urllib.parse.quote(api_key)}"
-    )
     request = urllib.request.Request(
-        url,
+        "https://api.groq.com/openai/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
         method="POST",
     )
     try:
@@ -425,12 +428,11 @@ def solve_image_questions(image_bytes, mime_type):
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read(2048).decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini API error ({exc.code}): {detail}") from exc
-    candidates = result.get("candidates", [])
-    parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
-    answer = "\n".join(part.get("text", "") for part in parts if part.get("text"))
+        raise RuntimeError(f"Groq API error ({exc.code}): {detail}") from exc
+    choices = result.get("choices", [])
+    answer = choices[0].get("message", {}).get("content", "") if choices else ""
     if not answer:
-        raise RuntimeError("Gemini returned no answer for this image.")
+        raise RuntimeError("Groq returned no answer for this image.")
     return answer
 
 
